@@ -1,0 +1,218 @@
+---
+title: "EDA olympics"
+author: "Usman  Siddiqui"
+date: "11/29/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r libraries}
+library(tidyverse)
+library(stringr)
+library(lubridate)
+library(ggrepel)
+library(MASS)
+library(cluster)
+library(ggforce)
+athletes <- read.csv("../data/athlete_events.csv")
+noc <- read.csv("../data/noc_regions.csv")
+vertical_x <- theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1,size = 5))
+```
+## Exploring data
+
+Find the medal tally of each country
+```{r qn1 , fig.width = 10}
+medals <- athletes %>%
+  filter(!(is.na(Medal))) %>%
+  filter(Season == "Summer")
+
+ggplot(data = medals , aes(x = NOC))+
+  geom_bar() + vertical_x + labs(title = "Number of medals by each country" , c) + 
+  scale_x_discrete(expand = c(0.01,0.01))+
+  geom_text(stat='count', aes(label=..count..), vjust=-1 , size = 1.5 , color = 'blue') +
+  facet_grid(rows  = vars(Medal))
+```
+
+Find the country with the highest medal tally and see how they fare over the years
+```{r qn2}
+best_perf <- medals %>% summarise(tally = n())
+top_country <- best_perf %>% filter(tally == 5002)
+top_country
+```
+This concludes that USA has been the best country in the summer olympics over the years
+
+
+### USA EDA
+```{r USA}
+usa <- medals %>% filter(NOC == "USA")
+
+total_diff_medals <- usa %>% group_by(Year , Medal) %>% 
+  summarise("medals per year" = n())
+
+total_medals <- total_diff_medals %>% group_by(Year) %>% 
+  summarise(tally = sum(`medals per year`))
+
+ggplot(total_medals , aes(x =Year , y = tally)) + 
+  geom_line()+
+  geom_point() +
+  geom_smooth(se=FALSE , method = "lm" , color = 'orange')+
+  geom_text(aes(x = Year , y = tally, label = tally),color = 'blue' , vjust = -0.7 , size = 3) +
+  scale_x_continuous(expand = c(0.05, 0.5), n.breaks = 30) + vertical_x+
+  labs(title = "Number of medals won over the years" , 
+       subtitle = "The trend shows an overall increasing trend in the number of medals won" , 
+       y = "Medals won")
+```
+
+Next, we will explore the number of gold medals won over the years for USA
+```{r gold_usa}
+only_gold_usa <- total_diff_medals %>% filter(Medal == "Gold")
+
+x_axis_labels <- min(only_gold_usa[,"Year"]):max(only_gold_usa[,"Year"])
+
+all_x_values <- scale_x_continuous(labels = x_axis_labels, breaks = x_axis_labels)
+
+ggplot(only_gold_usa , aes(x =Year , y = `medals per year`))+
+  geom_col() + vertical_x+
+  geom_smooth(se = FALSE , method = "lm") + all_x_values +
+  labs(title = "Number of gold medals won by team USA" ,
+       subtitle = "Trend is increasing" ,
+       caption = "Olympics did not always take place in 4 year intervals , but why?")
+```
+
+
+
+### Distribution of gold medals by age
+```{r distribution}
+gold_overall <- medals %>%filter(!is.na(Age)) %>%  
+  filter(Medal == "Gold") %>% group_by(Age , Medal)
+
+x_axis_labels_2 <- min(gold_overall[,"Age"]):max(gold_overall[,"Age"])
+
+all_x_values_2 <- scale_x_continuous(labels = x_axis_labels_2, breaks = x_axis_labels_2)
+ggplot(data = gold_overall) +
+  geom_bar(aes(x = Age , fill = Sex) , position = position_dodge()) + 
+  all_x_values_2 + 
+  vertical_x + 
+  scale_fill_manual("Sex" , values = c("M" = "black" , "F" = "red")) +
+  labs(title = "Gold medals won by age" , 
+       subtitle = "Normally distributed \nThe distributions for female and male athletes are different",
+       caption = "Youngest gold medalist is 13 years old , Oldest gold medalist is 64 years old" , 
+       y = "Total Medals")
+```
+
+### Relationship between BMI and Medals
+Firstly, I would like to see if the number of medals won is related to the BMI of the athlete
+```{r bmi}
+bmi <- medals %>% filter(!is.na(Height)) %>% 
+  filter(!is.na(Weight)) %>% 
+  mutate(bmi = Weight/(Height/100)^2) %>%
+  mutate(bmi = as.integer(bmi))
+
+to_plot<- bmi %>% filter(Medal == "Gold") %>%  
+  group_by(Medal , bmi) %>% 
+  summarise(Sport , Sex , tally = n())
+
+ggplot(to_plot , aes(x = bmi , y = tally , fill = Sex))+
+  geom_col()+
+  facet_wrap(vars(Sport))
+```
+
+```{r avg_bmi}
+bmi_avg <- bmi %>% filter(Sex == "M") %>% group_by(Medal , Sport) %>% 
+  summarise(avg_bmi =mean(bmi) , NOC)
+
+ggplot(data = bmi_avg , aes(x = avg_bmi , fill = Sport))+
+  geom_histogram(aes(y = (..count..)/sum(..count..)*100) , color = "black" , binwidth = 0.5)+
+  scale_x_continuous(n.breaks = 20) + 
+  scale_y_continuous(n.breaks = 20)+
+  labs(y = "percentage" , x = "average bmi",
+                                           title = "Percentage of male athletes bmi winning gold medals")+
+  theme(legend.key.size = unit(3 , "mm")) +vertical_x
+```
+
+Questions to be answered
+1) Find the density of age and how it changes overtime using geom density and make nearest graph more transparent.
+2) Jaccard index is the number of medals won in the same events for diff countries / union of all events they have participated in
+5) From the first graph, explore why was their a spike and a dip. Gain insights from dataset
+
+
+
+```{r}
+num_medal <- medals %>% group_by(Sport, Medal) %>% 
+  summarise(total =n() , Year) %>% group_by(Sport , Year) %>% summarise(medal_per_sport = n())
+
+medal_plot <-ggplot(data = num_medal , aes(x = Year , y = medal_per_sport))+
+  geom_col()+
+  scale_x_continuous(n.breaks = 30) + vertical_x + labs(title = "Number of medals given out per game",
+                                                        subtitle = "Number of medals increased throughout, hence the proportion of medals won increased as well")
+medal_plot
+```
+
+3) Number of sports that changed throughout the years and group the sports into different categories
+```{r sports}
+num_sports <- medals %>% group_by(Year,Sport) %>% 
+  summarise(total_sports = n()) %>% 
+  summarise(total_sports = n())
+
+sport_plot<- ggplot(data = num_sports , aes(x = Year , y = total_sports))+
+  geom_line()+
+  geom_point()+
+  scale_x_continuous(n.breaks = 30) + vertical_x+
+  scale_y_continuous(expand = c(0 ,10))+
+  geom_label(aes(label = total_sports) ,vjust = -0.5) +
+  labs(title = "Number of sports over the years" , 
+       subtitle = "The number of sports have increased over the years" , 
+       y = "total sports", x = "Years" )
+gridExtra::grid.arrange(sport_plot,medal_plot , ncol = 1)
+```
+
+
+```{r}
+sports_overyrs <- medals %>% dplyr::select(Year,Sport)
+  ggplot(sports_overyrs)+
+    geom_tile(aes(Year , fct_rev(fct_infreq(Sport))),height=.75, width=.75 , color = "black") +
+    scale_x_continuous(breaks = seq(1896,2020 ,4)) +vertical_x + labs(title = "Consistency of Sports over the years" , 
+                                                                      y = "sports")+
+    theme(axis.text.y = element_text(size = 6) , panel.background = element_rect(fill = "grey80",
+                                                                                 color = "black",
+                                                                                 size = 0.5 , linetype = 0.5))
+    
+```
+```{r jacardian}
+data_medal <- medals %>% filter(Medal == "Gold") %>%
+  arrange(Year) %>%
+  group_by(ID,Name) %>%
+  slice_min(Year,n=1) %>% 
+  group_by(Age, Year) %>% 
+  summarise(tally = n()) %>% 
+  arrange(Year) %>% ungroup()
+
+to_plot <- data_medal %>% 
+  mutate(alpha = ((Year-min(Year))/(max(Year) - min(Year))))
+
+ggplot(data = to_plot , aes(x = Age)) +
+  geom_density(aes(color = factor(alpha)) , show.legend = FALSE)+
+  scale_color_grey()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
