@@ -1,2 +1,3 @@
-# olympics_eda
+# olympics EDA
 Exploratory Data Analysis conducted on 100 years of Olympics Data 
+Having learnt various techniques over the past semester from enrolling in Prof Vik's DSA2101 (data visualisation) class, Neaton Ang and I decided to go one step further into the world of data analysis. We found a data set on Kaggle containing over 100 years of olympic records and went to explore it. During the course of the exploration, we thought of various findings and backed up certain claims with data and were able to visualise it. It was truly a refreshing and a challenging experience, given the fact that the exploration was not directed in any sort and we had to come up with our own claims and analysis. I have attached the pdf for your reference. Feel free to comment on any improvements that can be made as this is just the start of our journey as data scientists!
